@@ -17,22 +17,19 @@ seg_len = 51
 noverlap = 12
 
 
-DATA_FOLDER = '/home/shared_folders/Radar_Gesture_Data/' + dataset
+DATA_FOLDER = './data/' + dataset
 H5_FOLDER = '../data/' + dataset
 
 gesture_folder = [os.path.join(DATA_FOLDER, x) for x in os.listdir(DATA_FOLDER)]
-# print(gesture_folder)
 
 for cur_folder in gesture_folder:
     a = os.listdir(cur_folder)
     radar_data_path = os.path.join(cur_folder, os.listdir(cur_folder)[0])
-#    print(radar_data_path)
     
     radar_spec = spectrogram_double_channel(radar_data_path, data_len=data_len, seg_len = seg_len,
                                             noverlap = noverlap, freq = freq, sub_freq=sub_freq,
                                             pad_to = pad_to, shuffle=False, shift=True,
                                             log=True, normalization=False)
-    # print(radar_spec.shape)
 
     gesture_name = cur_folder.split('/')[-1]
     h5_path = os.path.join(H5_FOLDER, gesture_name)

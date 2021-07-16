@@ -14,7 +14,6 @@ import sys
 import h5py
 import scipy as sp
 import scipy.stats
-import tensorflow as tf
 
 def mean_confidence_interval(data, confidence=0.95):
     a = 1.0*np.array(data)
@@ -68,7 +67,8 @@ def generate_img_batch(data_l, data_r, label, batch_size=32, random_shuffle=True
         yield (X_batch, Y_batch)
 
 def spectrogram_double_channel(Path, data_len = 6000, seg_len = 51, noverlap = 12, freq = 2000, sub_freq = 2000,
-                               pad_to = 299, shuffle=False, log = False, shift=True, normalization=False):
+                               pad_to = 299, shuffle=False, log = False, shift=True, normalization=False,
+                               need_coor = False, threshold=None):
     '''
     generate data batch according to the data list(txt file)
     '''
@@ -79,7 +79,8 @@ def spectrogram_double_channel(Path, data_len = 6000, seg_len = 51, noverlap = 1
         data_Q_all = np.array(f.get('data_Q'))
 
     N = len(data_I_all)
-    inputs = np.zeros((N, pad_to, time_step))
+    specs = np.zeros((N, pad_to, time_step))
+    coors = [np.zeros((N, time_step)), np.zeros((N, pad_to))]
 
     for i in range(N):
         I = data_I_all[i, 0::int(freq / sub_freq)]
@@ -89,29 +90,38 @@ def spectrogram_double_channel(Path, data_len = 6000, seg_len = 51, noverlap = 1
             data_IQ[j] = complex(I[j], Q[j])
         freqs, t, spec = signal.spectrogram(data_IQ, fs=freq, window=('hamming'), nperseg=seg_len,
                                                   noverlap=noverlap, nfft=pad_to, detrend='constant',
-                                                  return_onesided=True, scaling='density', axis=-1,
+                                                  return_onesided=False, scaling='density', axis=-1,
                                                   mode='complex')
 
         if log:
             spec = 10 * np.log10(abs(spec) + np.spacing(1))
+            if threshold is not None:
+                spec[spec < threshold] = np.min(spec)
         else:
             spec = abs(spec)
 
         if shift:
             spec = np.fft.fftshift(spec, 0)
+            freqs = np.fft.fftshift(freqs, 0)
 
-        # if normalization:
+        # if normalizadtion:
         #     spec = normalize(spec, 0, 1)
+        if need_coor:
+            coors[0][i] = t
+            coors[1][i] = freqs
 
-        inputs[i] = spec
+        specs[i] = spec
 
     if shuffle:
-        np.random.shuffle(inputs)
+        np.random.shuffle(specs)
 
     if normalization:
-        inputs = inputs/1000 # the max value in our dataset is 980.704
+        specs = specs/1000 # the max value in our dataset is 980.704
 
-    return inputs
+    if need_coor:
+        return specs, coors
+    else:
+        return specs
 
 
 def spectrogram_single_channel(path_list, colum=6000, NFFT=51, noverlap=12, freq=2000,
@@ -147,6 +157,10 @@ def spectrogram_single_channel(path_list, colum=6000, NFFT=51, noverlap=12, freq
     return gesture_spec
 
 
+def count_param(net_inst):
+    print('# total parameters: ', sum(param.numel() for param in net_inst.parameters()))
+    print('# trainable parameters: ', sum(param.numel() for param in net_inst.parameters() if param.requires_grad))
+
 def normalize(data, lower, upper):
     mx = np.max(data)
     mn = np.min(data)
@@ -156,5 +170,4 @@ def normalize(data, lower, upper):
         norm_data = (upper-lower)*(data - mn) / (mx - mn) + lower
     return norm_data
 
-def count_param():
-    print('Trainable parameters: ', np.sum([np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()]))
+
